@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MUAT BARANG</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1D4E89">
+<link rel="icon" href="icon-192.png">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#F3F4F6;--card:#FFF;--ink:#14181F;--mute:#5B6472;--line:#E3E6EA;--accent:#1D4E89;--good:#157F3C;--bad:#B91C1C;}
+  *{box-sizing:border-box;}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:18px;margin:0;}
+  h1{font-size:16px;font-weight:800;margin:0 0 2px;} .sub{font-size:11px;color:var(--mute);margin-bottom:16px;}
+  #formCard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;max-width:420px;margin:0 auto;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mute);margin-bottom:5px;}
+  .field input,.field select{width:100%;padding:11px 12px;font-size:15px;border:1px solid var(--line);border-radius:8px;background:#fff;}
+  .field input:disabled,.field select:disabled{background:#F3F4F6;color:var(--mute);}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(29,78,137,.15);}
+  #btnScan{width:100%;padding:14px;font-size:15px;font-weight:700;border:none;border-radius:8px;background:#111827;color:#fff;cursor:pointer;margin-bottom:8px;}
+  #btnScan:disabled{opacity:.5;cursor:not-allowed;}
+  .manualRow{display:flex;gap:6px;margin-bottom:6px;}
+  .manualRow input{flex:1;padding:10px 12px;font-size:14px;border:1px solid var(--line);border-radius:8px;}
+  #btnCari{padding:10px 14px;font-size:13px;font-weight:700;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;}
+  #btnCari:disabled{opacity:.5;}
+  #scanInfo{font-size:12px;color:var(--mute);margin:6px 0 12px;min-height:16px;}
+  #infoBox{display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:11px 12px;margin-bottom:14px;font-size:12.5px;}
+  #infoBox .r{display:flex;justify-content:space-between;padding:3px 0;gap:8px;}
+  #infoBox .r span:last-child{font-weight:700;font-family:'Roboto Mono',monospace;text-align:right;}
+  .btn{width:100%;padding:13px;font-size:14px;font-weight:700;border:none;border-radius:8px;color:#fff;cursor:pointer;margin-top:8px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  #btnSave{background:var(--accent);margin-top:4px;}
+  #btnShare{background:#25D366;}
+  #btnReset{background:#fff;color:var(--mute);border:1px solid var(--line);font-size:12.5px;padding:10px;}
+  #msg{font-size:12.5px;margin-top:10px;min-height:16px;}
+  #msg.ok{color:var(--good);font-weight:700;} #msg.bad{color:var(--bad);font-weight:700;}
+  #scanModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:9999;padding:16px;}
+  #scanBox{background:#fff;border-radius:12px;padding:12px;max-width:420px;margin:10% auto 0;}
+</style>
+</head>
+<body>
+<h1>MUAT BARANG</h1>
+<div class="sub">Scan barcode No. Palet FG, lalu Simpan. Data masuk ke sheet MUAT BARANG.</div>
+
+<div id="formCard">
+  <div class="row2">
+    <div class="field"><label>Tanggal</label><input type="date" id="fTanggal"></div>
+    <div class="field"><label>Shift</label>
+      <select id="fShift"><option value="">- pilih -</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+    </div>
+  </div>
+
+  <button id="btnScan" type="button" onclick="muatBukaScan()">📷 Scan Barcode Palet</button>
+  <div class="manualRow">
+    <input type="text" id="fManual" placeholder="atau ketik No. Palet (barcode sobek)">
+    <button id="btnCari" type="button" onclick="muatCariManual()">CARI</button>
+  </div>
+  <div id="scanInfo"></div>
+
+  <div id="infoBox">
+    <div class="r"><span>No. Palet</span><span id="iPalet">-</span></div>
+    <div class="r"><span>Nama Produk</span><span id="iProduk">-</span></div>
+    <div class="r"><span>TF</span><span id="iTf">-</span></div>
+    <div class="r"><span>Qty</span><span id="iQty">-</span></div>
+    <div class="r"><span>Tgl Produksi</span><span id="iTglProd">-</span></div>
+    <div class="r"><span>Shift Produksi</span><span id="iShiftProd">-</span></div>
+    <div class="r"><span>Jam Produksi</span><span id="iJamProd">-</span></div>
+  </div>
+
+  <div class="field"><label>Nama Operator Muat</label><input type="text" id="fNamaMuat" placeholder="Nama operator muat"></div>
+
+  <button id="btnSave" class="btn" onclick="muatSimpan()">Simpan</button>
+  <button id="btnShare" class="btn" onclick="muatShareWa()" disabled>Share WA</button>
+  <button id="btnReset" class="btn" onclick="muatKosongkan()">Kosongkan Form</button>
+  <div id="msg"></div>
+</div>
+
+<div id="scanModal"><div id="scanBox">
+  <div style="font-weight:800;text-align:center;margin-bottom:8px;">Scan Barcode Palet</div>
+  <div id="reader"></div>
+  <button onclick="muatTutupScan()" style="width:100%;margin-top:10px;padding:11px;background:#fff;border:1px solid #ccc;border-radius:8px;">Tutup Kamera</button>
+</div></div>
+
+<script>
+var WEBAPP_URL='https://script.google.com/macros/s/AKfycbxp5L0rGdC0ki2M18YjNnylr0aAOXDLCzW5k84fJhT7aCkdlFrPeOY2tH0b75MMjDJh/exec';
+
+var muatItem=null;   // palet FG yang dipilih
+var muatLast=null;   // data yang sudah tersimpan
+var html5QrCode=null;
+
+function setMsg(t,c){ var m=document.getElementById('msg'); m.textContent=t; m.className=c||''; }
+function tanggalHariIni(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function jamSekarang(){ var n=new Date(); return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
+function fmtTglIndo(iso){ var p=String(iso).split('-'); return p.length===3 ? p[2]+'-'+p[1]+'-'+p[0] : iso; }
+
+// Cari No. Palet di FG (hanya yang belum dimuat)
+function muatCari(kode){
+  kode=String(kode||'').trim();
+  if(!kode){ setMsg('No. Palet kosong','bad'); return; }
+  if(muatLast){ setMsg('Data sudah tersimpan. Tekan Kosongkan Form dulu.','bad'); return; }
+  document.getElementById('scanInfo').textContent='No. Palet: '+kode;
+  setMsg('Mencari '+kode+'...','');
+  muatPilihNull();
+  fetch(WEBAPP_URL+'?action=muatCari&palet='+encodeURIComponent(kode))
+    .then(r=>r.json())
+    .then(res=>{
+      if(res&&res.ok&&res.item){ muatPilih(res.item); }
+      else { setMsg((res&&res.error)||'No. Palet tidak ditemukan','bad'); }
+    })
+    .catch(e=>{ setMsg('Gagal mencari: '+e.message,'bad'); });
+}
+
+function muatCariManual(){
+  muatCari(document.getElementById('fManual').value);
+}
+
+function muatPilih(it){
+  muatItem=it;
+  document.getElementById('iPalet').textContent=it.palet;
+  document.getElementById('iProduk').textContent=it.namaProduk;
+  document.getElementById('iTf').textContent=it.tf;
+  document.getElementById('iQty').textContent=it.qty;
+  document.getElementById('iTglProd').textContent=it.tglProduksi;
+  document.getElementById('iShiftProd').textContent=it.shiftProduksi;
+  document.getElementById('iJamProd').textContent=it.jamProduksi;
+  document.getElementById('infoBox').style.display='block';
+  setMsg('Palet dipilih. Isi operator muat lalu Simpan.','ok');
+}
+
+function muatPilihNull(){
+  muatItem=null;
+  document.getElementById('infoBox').style.display='none';
+}
+
+// Scan barcode palet
+function muatBukaScan(){
+  if(muatLast){ setMsg('Data sudah tersimpan. Tekan Kosongkan Form dulu.','bad'); return; }
+  document.getElementById('scanModal').style.display='block';
+  html5QrCode=new Html5Qrcode('reader');
+  html5QrCode.start(
+    {facingMode:'environment'},
+    {fps:10, qrbox:{width:280,height:120}},
+    function(decoded){
+      muatTutupScan();
+      muatCari(String(decoded).trim());
+    },
+    function(){}
+  ).catch(function(e){
+    document.getElementById('scanModal').style.display='none';
+    setMsg('Kamera gagal dibuka: '+e,'bad');
+  });
+}
+function muatTutupScan(){
+  document.getElementById('scanModal').style.display='none';
+  if(html5QrCode){
+    html5QrCode.stop().then(function(){ html5QrCode.clear(); }).catch(function(){});
+    html5QrCode=null;
+  }
+}
+
+function muatKunci(on){
+  ['fTanggal','fShift','fNamaMuat','fManual'].forEach(function(id){
+    document.getElementById(id).disabled=on;
+  });
+  document.getElementById('btnScan').disabled=on;
+  document.getElementById('btnCari').disabled=on;
+  document.getElementById('btnSave').disabled=on;
+}
+
+function muatSimpan(){
+  if(muatLast){ setMsg('Data sudah tersimpan. Tekan Kosongkan Form untuk input baru.','bad'); return; }
+  var tanggal=document.getElementById('fTanggal').value;
+  var shift=document.getElementById('fShift').value;
+  var namaMuat=document.getElementById('fNamaMuat').value.trim();
+  if(!tanggal){ setMsg('Tanggal belum diisi','bad'); return; }
+  if(!shift){ setMsg('Shift belum dipilih','bad'); return; }
+  if(!muatItem){ setMsg('Scan atau ketik No. Palet dulu','bad'); return; }
+  if(!namaMuat){ setMsg('Nama operator muat belum diisi','bad'); return; }
+
+  var payload={
+    _app:'muat',
+    tanggal:tanggal,
+    jam:jamSekarang(),
+    shift:shift,
+    palet:muatItem.palet,
+    tf:muatItem.tf,
+    namaProduk:muatItem.namaProduk,
+    qty:muatItem.qty,
+    namaMuat:namaMuat,
+    jamProduksi:muatItem.jamProduksi,
+    tglProduksi:muatItem.tglProduksi,
+    shiftProduksi:muatItem.shiftProduksi
+  };
+
+  var btn=document.getElementById('btnSave');
+  btn.disabled=true; setMsg('Menyimpan...','');
+
+  fetch(WEBAPP_URL+'?action=save&payload='+encodeURIComponent(JSON.stringify(payload)))
+    .then(r=>r.text())
+    .then(t=>{
+      var res;
+      try{ res=JSON.parse(t); }catch(e){ res={ok:false,error:'Respon server: '+t.slice(0,200)}; }
+      if(res&&res.ok){
+        muatLast=payload;
+        muatKunci(true);
+        document.getElementById('btnShare').disabled=false;
+        setMsg('✅ Tersimpan. Tekan Share WA, lalu Kosongkan Form untuk input berikutnya.','ok');
+      } else {
+        btn.disabled=false;
+        setMsg('❌ Gagal: '+(res.error||'tidak diketahui'),'bad');
+      }
+    })
+    .catch(e=>{ btn.disabled=false; setMsg('❌ Gagal: '+e.message,'bad'); });
+}
+
+function muatPesan(d){
+  return "🚚 MUAT BARANG\n"+
+    "Tanggal: "+fmtTglIndo(d.tanggal)+" | Jam: "+d.jam+"\n"+
+    "Shift: "+d.shift+"\n"+
+    "No. Palet: "+d.palet+"\n"+
+    "TF: "+d.tf+"\n"+
+    "Nama Produk: "+d.namaProduk+"\n"+
+    "Qty: "+d.qty+"\n"+
+    "Jam Produksi: "+d.jamProduksi+"\n"+
+    "Operator Muat: "+d.namaMuat;
+}
+
+function muatShareWa(){
+  if(!muatLast){ setMsg('Simpan dulu','bad'); return; }
+  window.open("https://wa.me/?text="+encodeURIComponent(muatPesan(muatLast)),"_blank");
+}
+
+function muatKosongkan(){
+  muatLast=null;
+  muatPilihNull();
+  ['fShift','fNamaMuat','fManual'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('fTanggal').value=tanggalHariIni();
+  document.getElementById('scanInfo').textContent='';
+  document.getElementById('btnShare').disabled=true;
+  muatKunci(false);
+  setMsg('Form dikosongkan. Scan palet untuk input berikutnya.','ok');
+}
+
+document.getElementById('fTanggal').value=tanggalHariIni();
+</script>
+</body>
+</html>
