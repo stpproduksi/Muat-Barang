@@ -44,7 +44,7 @@
 </head>
 <body>
 <h1>MUAT BARANG</h1>
-<div class="sub">Scan barcode No. Palet FG, lalu Simpan. Data masuk ke sheet MUAT BARANG.</div>
+<div class="sub">Scan barcode No. Palet FG, atur Qty Muat, lalu Simpan. Data masuk ke sheet MUAT BARANG.</div>
 
 <div id="formCard">
   <div class="row2">
@@ -65,12 +65,18 @@
     <div class="r"><span>No. Palet</span><span id="iPalet">-</span></div>
     <div class="r"><span>Nama Produk</span><span id="iProduk">-</span></div>
     <div class="r"><span>TF</span><span id="iTf">-</span></div>
-    <div class="r"><span>Qty</span><span id="iQty">-</span></div>
+    <div class="r"><span>Qty Produksi</span><span id="iQty">-</span></div>
+    <div class="r"><span>Sisa Palet</span><span id="iSisa">-</span></div>
     <div class="r"><span>Tgl Produksi</span><span id="iTglProd">-</span></div>
     <div class="r"><span>Shift Produksi</span><span id="iShiftProd">-</span></div>
     <div class="r"><span>Jam Produksi</span><span id="iJamProd">-</span></div>
   </div>
 
+  <div class="row2">
+    <div class="field"><label>Qty Muat</label><input type="number" id="fQty" min="1"></div>
+    <div class="field"><label>Tujuan</label><input type="text" id="fTujuan" placeholder="contoh: SBY"></div>
+  </div>
+  <div class="field"><label>Keterangan</label><input type="text" id="fKet" placeholder="contoh: 25-15 muat ke SBY, sisa 10"></div>
   <div class="field"><label>Nama Operator Muat</label><input type="text" id="fNamaMuat" placeholder="Nama operator muat"></div>
 
   <button id="btnSave" class="btn" onclick="muatSimpan()">Simpan</button>
@@ -88,7 +94,7 @@
 <script>
 var WEBAPP_URL='https://script.google.com/macros/s/AKfycbxp5L0rGdC0ki2M18YjNnylr0aAOXDLCzW5k84fJhT7aCkdlFrPeOY2tH0b75MMjDJh/exec';
 
-var muatItem=null;   // palet FG yang dipilih
+var muatItem=null;   // palet FG yang dipilih (termasuk sisa)
 var muatLast=null;   // data yang sudah tersimpan
 var html5QrCode=null;
 
@@ -97,7 +103,7 @@ function tanggalHariIni(){ var d=new Date(); return d.getFullYear()+'-'+String(d
 function jamSekarang(){ var n=new Date(); return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
 function fmtTglIndo(iso){ var p=String(iso).split('-'); return p.length===3 ? p[2]+'-'+p[1]+'-'+p[0] : iso; }
 
-// Cari No. Palet di FG (hanya yang belum dimuat)
+// Cari No. Palet di FG (server mengembalikan item beserta sisa)
 function muatCari(kode){
   kode=String(kode||'').trim();
   if(!kode){ setMsg('No. Palet kosong','bad'); return; }
@@ -124,11 +130,13 @@ function muatPilih(it){
   document.getElementById('iProduk').textContent=it.namaProduk;
   document.getElementById('iTf').textContent=it.tf;
   document.getElementById('iQty').textContent=it.qty;
+  document.getElementById('iSisa').textContent=it.sisa;
   document.getElementById('iTglProd').textContent=it.tglProduksi;
   document.getElementById('iShiftProd').textContent=it.shiftProduksi;
   document.getElementById('iJamProd').textContent=it.jamProduksi;
+  document.getElementById('fQty').value=it.sisa;   // default: muat semua sisa
   document.getElementById('infoBox').style.display='block';
-  setMsg('Palet dipilih. Isi operator muat lalu Simpan.','ok');
+  setMsg('Palet dipilih. Atur Qty Muat, isi operator, lalu Simpan.','ok');
 }
 
 function muatPilihNull(){
@@ -163,7 +171,7 @@ function muatTutupScan(){
 }
 
 function muatKunci(on){
-  ['fTanggal','fShift','fNamaMuat','fManual'].forEach(function(id){
+  ['fTanggal','fShift','fNamaMuat','fManual','fQty','fTujuan','fKet'].forEach(function(id){
     document.getElementById(id).disabled=on;
   });
   document.getElementById('btnScan').disabled=on;
@@ -176,10 +184,16 @@ function muatSimpan(){
   var tanggal=document.getElementById('fTanggal').value;
   var shift=document.getElementById('fShift').value;
   var namaMuat=document.getElementById('fNamaMuat').value.trim();
+  var qty=parseFloat(document.getElementById('fQty').value);
+  var tujuan=document.getElementById('fTujuan').value.trim();
+  var ket=document.getElementById('fKet').value.trim();
+
   if(!tanggal){ setMsg('Tanggal belum diisi','bad'); return; }
   if(!shift){ setMsg('Shift belum dipilih','bad'); return; }
   if(!muatItem){ setMsg('Scan atau ketik No. Palet dulu','bad'); return; }
   if(!namaMuat){ setMsg('Nama operator muat belum diisi','bad'); return; }
+  if(!(qty>0)){ setMsg('Qty muat harus lebih dari 0','bad'); return; }
+  if(qty>muatItem.sisa){ setMsg('Qty melebihi sisa palet ('+muatItem.sisa+')','bad'); return; }
 
   var payload={
     _app:'muat',
@@ -189,8 +203,10 @@ function muatSimpan(){
     palet:muatItem.palet,
     tf:muatItem.tf,
     namaProduk:muatItem.namaProduk,
-    qty:muatItem.qty,
+    qty:qty,
     namaMuat:namaMuat,
+    tujuan:tujuan,
+    keterangan:ket,
     jamProduksi:muatItem.jamProduksi,
     tglProduksi:muatItem.tglProduksi,
     shiftProduksi:muatItem.shiftProduksi
@@ -206,9 +222,10 @@ function muatSimpan(){
       try{ res=JSON.parse(t); }catch(e){ res={ok:false,error:'Respon server: '+t.slice(0,200)}; }
       if(res&&res.ok){
         muatLast=payload;
+        muatLast.sisaSetelah=res.sisa;
         muatKunci(true);
         document.getElementById('btnShare').disabled=false;
-        setMsg('✅ Tersimpan. Tekan Share WA, lalu Kosongkan Form untuk input berikutnya.','ok');
+        setMsg('✅ Tersimpan. Sisa palet: '+res.sisa+'. Tekan Share WA, lalu Kosongkan Form.','ok');
       } else {
         btn.disabled=false;
         setMsg('❌ Gagal: '+(res.error||'tidak diketahui'),'bad');
@@ -224,8 +241,10 @@ function muatPesan(d){
     "No. Palet: "+d.palet+"\n"+
     "TF: "+d.tf+"\n"+
     "Nama Produk: "+d.namaProduk+"\n"+
-    "Qty: "+d.qty+"\n"+
-    "Jam Produksi: "+d.jamProduksi+"\n"+
+    "Qty Muat: "+d.qty+"\n"+
+    "Tujuan: "+(d.tujuan||'-')+"\n"+
+    "Keterangan: "+(d.keterangan||'-')+"\n"+
+    "Sisa Palet: "+(d.sisaSetelah!=null?d.sisaSetelah:'-')+"\n"+
     "Operator Muat: "+d.namaMuat;
 }
 
@@ -237,7 +256,7 @@ function muatShareWa(){
 function muatKosongkan(){
   muatLast=null;
   muatPilihNull();
-  ['fShift','fNamaMuat','fManual'].forEach(function(id){ document.getElementById(id).value=''; });
+  ['fShift','fNamaMuat','fManual','fQty','fTujuan','fKet'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('fTanggal').value=tanggalHariIni();
   document.getElementById('scanInfo').textContent='';
   document.getElementById('btnShare').disabled=true;
