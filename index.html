@@ -74,8 +74,16 @@
 
   <div class="row2">
     <div class="field"><label>Qty Muat</label><input type="number" id="fQty" min="1"></div>
-    <div class="field"><label>Tujuan</label><input type="text" id="fTujuan" placeholder="contoh: SBY"></div>
-  </div>
+    <div class="field"><label>Tujuan</label>
+  <select id="fTujuan">
+    <option value="">- pilih -</option>
+    <option value="CUSTOMER">CUSTOMER</option>
+    <option value="PANDAAN">PANDAAN</option>
+    <option value="KREBET">KREBET</option>
+    <option value="SENGON">SENGON</option>
+    <option value="PRODUKSI">PRODUKSI</option>
+  </select>
+</div>
   <div class="field"><label>Keterangan</label><input type="text" id="fKet" placeholder="contoh: 25-15 muat ke SBY, sisa 10"></div>
   <div class="field"><label>Nama Operator Muat</label><input type="text" id="fNamaMuat" placeholder="Nama operator muat"></div>
 
@@ -190,6 +198,7 @@ function muatSimpan(){
 
   if(!tanggal){ setMsg('Tanggal belum diisi','bad'); return; }
   if(!shift){ setMsg('Shift belum dipilih','bad'); return; }
+  if(!tujuan){ setMsg('Tujuan belum dipilih','bad'); return; }
   if(!muatItem){ setMsg('Scan atau ketik No. Palet dulu','bad'); return; }
   if(!namaMuat){ setMsg('Nama operator muat belum diisi','bad'); return; }
   if(!(qty>0)){ setMsg('Qty muat harus lebih dari 0','bad'); return; }
