@@ -306,7 +306,7 @@ function muatPesan(){
   var totalQty=0;
   paletSesi.forEach(function(p,i){
     totalQty+=Number(p.qty)||0;
-    teks+=(i+1)+". "+p.palet+" | "+p.produk+" | TF "+p.tf+" | Qty "+p.qty+"\n";
+    teks+=(i+1)+". "+p.palet+" | "+p.produk+" | Qty "+p.qty+"\n";
   });
   teks+="----------------------\n"+
     "Jumlah muatan: "+paletSesi.length+"\n"+
