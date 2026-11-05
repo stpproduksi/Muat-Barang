@@ -309,23 +309,27 @@ function muatSimpan(){
     .catch(e=>{ btn.disabled=false; setMsg('❌ Gagal: '+e.message,'bad'); });
 }
 
-function muatPesan(d){
-  return "🚚 MUAT BARANG\n"+
-    "Tanggal: "+fmtTglIndo(d.tanggal)+" | Jam: "+d.jam+"\n"+
-    "Shift: "+d.shift+"\n"+
-    "No. Palet: "+d.palet+"\n"+
-    "TF: "+d.tf+"\n"+
-    "Nama Produk: "+d.namaProduk+"\n"+
-    "Qty Muat: "+d.qty+"\n"+
-    "Tujuan: "+(d.tujuan||'-')+"\n"+
-    "Keterangan: "+(d.keterangan||'-')+"\n"+
-    "Sisa Palet: "+(d.sisaSetelah!=null?d.sisaSetelah:'-')+"\n"+
-    "Operator Muat: "+d.namaMuat;
+function muatPesan(){
+  var tgl=document.getElementById('fTanggal').value||tanggalHariIni();
+  var teks="🚚 MUAT BARANG\n"+
+    "Tanggal: "+fmtTglIndo(tgl)+"\n"+
+    "Tujuan: "+(paletSesi.length?paletSesi[0].tujuan:'-')+"\n"+
+    "----------------------\n";
+  var totalQty=0;
+  paletSesi.forEach(function(p,i){
+    totalQty+=Number(p.qty)||0;
+    teks+=(i+1)+". "+p.palet+" | "+p.produk+" | TF "+p.tf+" | Qty "+p.qty+"\n";
+  });
+  teks+="----------------------\n"+
+    "Jumlah muatan: "+paletSesi.length+"\n"+
+    "Total qty: "+totalQty+"\n";
+  if(muatLast && muatLast.namaMuat) teks+="Operator Muat: "+muatLast.namaMuat+"\n";
+  return teks;
 }
 
 function muatShareWa(){
-  if(!muatLast){ setMsg('Simpan dulu','bad'); return; }
-  window.open("https://wa.me/?text="+encodeURIComponent(muatPesan(muatLast)),"_blank");
+  if(!paletSesi.length){ setMsg('Belum ada muatan di sesi ini','bad'); return; }
+  window.open("https://wa.me/?text="+encodeURIComponent(muatPesan()),"_blank");
 }
 
 function muatKosongkan(){
