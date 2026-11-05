@@ -48,13 +48,14 @@
   #sesiInfo{font-size:12.5px;color:var(--mute);margin-bottom:8px;}
   #sesiTabel table,#rincianKitir table{width:100%;border-collapse:collapse;font-size:13px;}
   #sesiTabel th,#sesiTabel td,#rincianKitir th,#rincianKitir td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;}
-  #sesiTabel .tot td{font-weight:700;border-bottom:none;}
+  #sesiTabel .tot td,#rincianKitir .tot td{font-weight:700;border-bottom:none;}
   #rincianKitir .noKit{font-weight:700;font-family:'Roboto Mono',monospace;margin:10px 0 4px;}
   .btnRow{display:flex;gap:8px;}
   .btnRow .btn{margin-top:8px;}
   #btnTambah{background:#fff;color:var(--accent);border:1px solid var(--accent);}
   #btnSelesai{background:#7C3AED;}
   #btnCetak{background:var(--accent);display:none;}
+  #btnShareKitir{background:#25D366;display:none;}
   #btnSesiBaru{background:#fff;color:var(--mute);border:1px solid var(--line);display:none;}
   #rincianKitir{margin-top:6px;}
 
@@ -130,16 +131,17 @@
     <button id="btnSelesai" class="btn" onclick="kitirSelesaiMuat()">Selesai Muat</button>
   </div>
 
-<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
-  <div class="judul">Cetak Ulang Kitir Lama</div>
-  <div class="manualRow">
-    <input type="text" id="fKitirCari" placeholder="ketik No. Kitir, misal KTR-20261105-001" autocapitalize="characters">
-    <button id="btnKitirCari" type="button" onclick="kitirCariLama()">CARI</button>
+  <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+    <div class="judul">Cetak Ulang Kitir Lama</div>
+    <div class="manualRow">
+      <input type="text" id="fKitirCari" placeholder="ketik No. Kitir, misal KTR-20261105-001" autocapitalize="characters">
+      <button id="btnKitirCari" type="button" onclick="kitirCariLama()">CARI</button>
+    </div>
   </div>
-</div>
 
   <div id="rincianKitir"></div>
   <button id="btnCetak" class="btn" onclick="kitirCetak()">Cetak Kitir</button>
+  <button id="btnShareKitir" class="btn" onclick="kitirShareWa()">Share WA Kitir</button>
   <button id="btnSesiBaru" class="btn" onclick="kitirSesiBaru()">Selesai &amp; Mulai Sesi Baru</button>
 </div>
 
@@ -164,6 +166,7 @@ var html5QrCode=null;
 
 var paletSesi=[];
 var kitirAktif=null;
+var kitirItems=[];   // rincian kitir yang sedang tampil (dari server), dipakai untuk cetak dan share ulang
 var SESI_KEY='muatSesiKitir';
 
 function setMsg(t,c){ var m=document.getElementById('msg'); m.textContent=t; m.className=c||''; }
@@ -319,6 +322,28 @@ function muatShareWa(){
   window.open("https://wa.me/?text="+encodeURIComponent(muatPesan()),"_blank");
 }
 
+// Share ulang rincian kitir yang sedang tampil (bisa setelah cetak ulang)
+function kitirPesan(){
+  var tujuan=(kitirItems[0]&&kitirItems[0].tujuan)||(paletSesi.length?paletSesi[0].tujuan:'-');
+  var teks="🚚 KITIR MUAT\n"+
+    "No. Kitir: "+kitirAktif+"\n"+
+    "Tujuan: "+tujuan+"\n"+
+    "----------------------\n";
+  var totalQty=0;
+  kitirItems.forEach(function(it,i){
+    totalQty+=Number(it.qty)||0;
+    teks+=(i+1)+". "+it.palet+" | "+it.produk+" | Qty "+it.qty+"\n";
+  });
+  teks+="----------------------\n"+
+    "Jumlah muatan: "+kitirItems.length+"\n"+
+    "Total qty: "+totalQty+"\n";
+  return teks;
+}
+function kitirShareWa(){
+  if(!kitirAktif || !kitirItems.length){ setMsg('Belum ada kitir yang ditampilkan.','bad'); return; }
+  window.open("https://wa.me/?text="+encodeURIComponent(kitirPesan()),"_blank");
+}
+
 function muatKosongkan(){
   muatLast=null;
   muatPilihNull();
@@ -334,12 +359,12 @@ function muatKosongkan(){
 /* ================= KITIR ================= */
 
 function kitirSimpanLokal(){
-  try{ localStorage.setItem(SESI_KEY, JSON.stringify({sesi:paletSesi, kitir:kitirAktif})); }catch(e){}
+  try{ localStorage.setItem(SESI_KEY, JSON.stringify({sesi:paletSesi, kitir:kitirAktif, items:kitirItems})); }catch(e){}
 }
 function kitirMuatLokal(){
   try{
     var s=JSON.parse(localStorage.getItem(SESI_KEY)||'null');
-    if(s){ paletSesi=s.sesi||[]; kitirAktif=s.kitir||null; }
+    if(s){ paletSesi=s.sesi||[]; kitirAktif=s.kitir||null; kitirItems=s.items||[]; }
   }catch(e){}
 }
 
@@ -349,16 +374,18 @@ function kitirRenderSesi(){
   var rowAwal=document.getElementById('rowAwal');
 
   if(kitirAktif){
-    info.textContent='Kitir sudah dibuat. Cek rincian, lalu Cetak Kitir.';
+    info.textContent='Kitir sudah dibuat. Cek rincian, lalu Cetak Kitir atau Share WA Kitir.';
     tabel.innerHTML='';
     rowAwal.style.display='none';
     document.getElementById('btnCetak').style.display='block';
+    document.getElementById('btnShareKitir').style.display=kitirItems.length?'block':'none';
     document.getElementById('btnSesiBaru').style.display='block';
     return;
   }
 
   rowAwal.style.display='flex';
   document.getElementById('btnCetak').style.display='none';
+  document.getElementById('btnShareKitir').style.display='none';
   document.getElementById('btnSesiBaru').style.display='none';
   document.getElementById('rincianKitir').innerHTML='';
 
@@ -415,26 +442,25 @@ async function kitirSelesaiMuat(){
   }
 
   kitirAktif=r.kitir;
-  kitirSimpanLokal();
   kitirTampilRincian(r.kitir, r.items);
   document.getElementById('sesiTabel').innerHTML='';
   kitirRenderSesi();
   setMsg('Kitir '+r.kitir+' dibuat. Cek rincian, lalu Cetak Kitir.','ok');
 }
 
-// Tampilkan rincian kitir (dipakai saat baru dibuat maupun saat dicari ulang)
 function kitirTampilRincian(kitir, items){
+  kitirItems=items||[];
+  kitirSimpanLokal();
   var totalQty=0;
   var html='<div class="noKit">No. Kitir: '+esc(kitir)+'</div><table><tr><th>Palet</th><th>TF</th><th>Produk</th><th>Qty</th></tr>';
-  items.forEach(function(it){
+  kitirItems.forEach(function(it){
     totalQty+=Number(it.qty)||0;
     html+='<tr><td>'+esc(it.palet)+'</td><td>'+esc(it.tf)+'</td><td>'+esc(it.produk)+'</td><td>'+esc(it.qty)+'</td></tr>';
   });
-  html+='<tr class="tot"><td colspan="3">Total '+items.length+' muatan</td><td>'+totalQty+'</td></tr></table>';
+  html+='<tr class="tot"><td colspan="3">Total '+kitirItems.length+' muatan</td><td>'+totalQty+'</td></tr></table>';
   document.getElementById('rincianKitir').innerHTML=html;
 }
 
-// Cari kitir lama dari server untuk dicetak ulang (hanya membaca)
 async function kitirCariLama(){
   var kode=document.getElementById('fKitirCari').value.trim().toUpperCase();
   if(!kode){ setMsg('Ketik No. Kitir dulu.','bad'); return; }
@@ -446,15 +472,13 @@ async function kitirCariLama(){
     var r=await res.json();
     if(!r.ok){ setMsg('❌ '+r.error,'bad'); return; }
     kitirAktif=r.kitir;
-    kitirSimpanLokal();
     kitirTampilRincian(r.kitir, r.items);
     document.getElementById('sesiTabel').innerHTML='';
     kitirRenderSesi();
-    setMsg('Kitir '+r.kitir+' ditemukan. Tekan Cetak Kitir untuk cetak ulang.','ok');
+    setMsg('Kitir '+r.kitir+' ditemukan. Tekan Cetak Kitir atau Share WA Kitir.','ok');
   }catch(e){ setMsg('Gagal mencari: '+e.message,'bad'); }
 }
 
-// Cetak: hanya barcode dan No. Kitir (rincian tidak ikut dicetak)
 function kitirCetak(){
   if(!kitirAktif){ setMsg('Belum ada kitir.','bad'); return; }
   JsBarcode('#barcodeKitir', kitirAktif, {format:'CODE128', width:2, height:70, displayValue:false});
@@ -467,6 +491,7 @@ function kitirSesiBaru(){
   if(!confirm('Mulai sesi baru? Daftar muatan dan kitir ini akan dikosongkan.')) return;
   paletSesi=[];
   kitirAktif=null;
+  kitirItems=[];
   try{ localStorage.removeItem(SESI_KEY); }catch(e){}
   document.getElementById('kitirNoTampil').textContent='';
   document.getElementById('rincianKitir').innerHTML='';
@@ -477,4 +502,7 @@ function kitirSesiBaru(){
 document.getElementById('fTanggal').value=tanggalHariIni();
 kitirMuatLokal();
 kitirRenderSesi();
+if(kitirAktif && kitirItems.length){ kitirTampilRincian(kitirAktif, kitirItems); }
 </script>
+</body>
+</html>
