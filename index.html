@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#1D4E89">
 <link rel="icon" href="icon-192.png">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#F3F4F6;--card:#FFF;--ink:#14181F;--mute:#5B6472;--line:#E3E6EA;--accent:#1D4E89;--good:#157F3C;--bad:#B91C1C;}
@@ -40,6 +41,25 @@
   #msg.ok{color:var(--good);font-weight:700;} #msg.bad{color:var(--bad);font-weight:700;}
   #scanModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:9999;padding:16px;}
   #scanBox{background:#fff;border-radius:12px;padding:12px;max-width:420px;margin:10% auto 0;}
+
+  /* Kartu kitir */
+  #kitirCard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;max-width:420px;margin:14px auto 0;}
+  #kitirCard .judul{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mute);margin-bottom:8px;}
+  #sesiInfo{font-size:12.5px;color:var(--mute);margin-bottom:6px;}
+  #rincianKitir table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+  #rincianKitir th,#rincianKitir td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;}
+  #rincianKitir .noKit{font-weight:700;font-family:'Roboto Mono',monospace;margin-top:8px;}
+  #btnSelesai{background:#7C3AED;margin-top:0;}
+  #btnCetak{background:var(--accent);display:none;}
+  #btnSesiBaru{background:#fff;color:var(--mute);border:1px solid var(--line);display:none;}
+
+  /* Area cetak: hanya tampil saat print */
+  #kitirPrint{display:none;text-align:center;padding:20px;}
+
+  @media print{
+    body > *:not(#kitirPrint){display:none !important;}
+    #kitirPrint{display:block !important;}
+  }
 </style>
 </head>
 <body>
@@ -75,15 +95,16 @@
   <div class="row2">
     <div class="field"><label>Qty Muat</label><input type="number" id="fQty" min="1"></div>
     <div class="field"><label>Tujuan</label>
-  <select id="fTujuan">
-    <option value="">- pilih -</option>
-    <option value="CUSTOMER">CUSTOMER</option>
-    <option value="PANDAAN">PANDAAN</option>
-    <option value="KREBET">KREBET</option>
-    <option value="SENGON">SENGON</option>
-    <option value="PRODUKSI">PRODUKSI</option>
-  </select>
-</div>
+      <select id="fTujuan">
+        <option value="">- pilih -</option>
+        <option value="CUSTOMER">CUSTOMER</option>
+        <option value="PANDAAN">PANDAAN</option>
+        <option value="KREBET">KREBET</option>
+        <option value="SENGON">SENGON</option>
+        <option value="PRODUKSI">PRODUKSI</option>
+      </select>
+    </div>
+  </div>
   <div class="field"><label>Keterangan</label><input type="text" id="fKet" placeholder="contoh: 25-15 muat ke SBY, sisa 10"></div>
   <div class="field"><label>Nama Operator Muat</label><input type="text" id="fNamaMuat" placeholder="Nama operator muat"></div>
 
@@ -91,6 +112,22 @@
   <button id="btnShare" class="btn" onclick="muatShareWa()" disabled>Share WA</button>
   <button id="btnReset" class="btn" onclick="muatKosongkan()">Kosongkan Form</button>
   <div id="msg"></div>
+</div>
+
+<!-- KARTU KITIR -->
+<div id="kitirCard">
+  <div class="judul">Kitir Pengiriman</div>
+  <div id="sesiInfo">Palet dimuat di sesi ini: 0</div>
+  <button id="btnSelesai" class="btn" onclick="kitirSelesaiMuat()">Selesai Muat</button>
+  <div id="rincianKitir"></div>
+  <button id="btnCetak" class="btn" onclick="kitirCetak()">Cetak Kitir</button>
+  <button id="btnSesiBaru" class="btn" onclick="kitirSesiBaru()">Selesai &amp; Mulai Sesi Baru</button>
+</div>
+
+<!-- AREA CETAK: barcode dan No. Kitir saja -->
+<div id="kitirPrint">
+  <svg id="barcodeKitir"></svg>
+  <div id="kitirNoTampil" style="font-size:22px;font-weight:700;margin-top:6px;"></div>
 </div>
 
 <div id="scanModal"><div id="scanBox">
@@ -105,6 +142,10 @@ var WEBAPP_URL='https://script.google.com/macros/s/AKfycbxp5L0rGdC0ki2M18YjNnylr
 var muatItem=null;   // palet FG yang dipilih (termasuk sisa)
 var muatLast=null;   // data yang sudah tersimpan
 var html5QrCode=null;
+
+// Kitir
+var paletSesi=[];    // palet yang berhasil disimpan di sesi ini
+var kitirAktif=null; // No. Kitir yang sudah dibuat
 
 function setMsg(t,c){ var m=document.getElementById('msg'); m.textContent=t; m.className=c||''; }
 function tanggalHariIni(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -237,6 +278,9 @@ function muatSimpan(){
         muatLast.sisaSetelah=res.sisa;
         muatKunci(true);
         document.getElementById('btnShare').disabled=false;
+        // Masukkan ke sesi kitir
+        paletSesi.push(payload.palet);
+        kitirUpdateSesiInfo();
         setMsg('✅ Tersimpan. Sisa palet: '+res.sisa+'. Tekan Share WA, lalu Kosongkan Form.','ok');
       } else {
         btn.disabled=false;
@@ -276,7 +320,69 @@ function muatKosongkan(){
   setMsg('Form dikosongkan. Scan palet untuk input berikutnya.','ok');
 }
 
+/* ================= KITIR ================= */
+
+function kitirUpdateSesiInfo(){
+  var uniq=[...new Set(paletSesi)];
+  document.getElementById('sesiInfo').textContent='Palet dimuat di sesi ini: '+uniq.length;
+}
+
+// Selesai Muat: buat No. Kitir dari palet di sesi, lalu tampilkan rincian untuk dicek
+async function kitirSelesaiMuat(){
+  if(kitirAktif){ setMsg('Kitir sudah dibuat. Cetak atau mulai sesi baru.','bad'); return; }
+  if(!paletSesi.length){ setMsg('Belum ada palet yang dimuat di sesi ini.','bad'); return; }
+
+  var tgl=document.getElementById('fTanggal').value||tanggalHariIni();
+  var payload={_app:'kitirbuat', tanggal:tgl, palets:[...new Set(paletSesi)]};
+  setMsg('Membuat kitir...','');
+
+  var r;
+  try{
+    var res=await fetch(WEBAPP_URL+'?action=save&payload='+encodeURIComponent(JSON.stringify(payload)));
+    r=await res.json();
+  }catch(e){ setMsg('Gagal membuat kitir: '+e.message,'bad'); return; }
+
+  if(!r.ok){ setMsg('❌ '+r.error,'bad'); return; }
+
+  kitirAktif=r.kitir;
+  var html='<table><tr><th>Palet</th><th>TF</th><th>Produk</th><th>Qty</th></tr>';
+  r.items.forEach(function(it){
+    html+='<tr><td>'+it.palet+'</td><td>'+it.tf+'</td><td>'+it.produk+'</td><td>'+it.qty+'</td></tr>';
+  });
+  html+='</table><div class="noKit">No. Kitir: '+r.kitir+'</div>';
+  document.getElementById('rincianKitir').innerHTML=html;
+
+  document.getElementById('btnSelesai').disabled=true;
+  document.getElementById('btnCetak').style.display='block';
+  document.getElementById('btnSesiBaru').style.display='block';
+  setMsg('Kitir '+r.kitir+' dibuat. Cek rincian, lalu Cetak Kitir.','ok');
+}
+
+// Cetak: hanya barcode dan No. Kitir (rincian tidak ikut dicetak)
+function kitirCetak(){
+  if(!kitirAktif){ setMsg('Belum ada kitir.','bad'); return; }
+  JsBarcode('#barcodeKitir', kitirAktif, {format:'CODE128', width:2, height:70, displayValue:false});
+  document.getElementById('kitirNoTampil').textContent=kitirAktif;
+  window.print();
+}
+
+// Setelah kitir selesai dicetak, kosongkan sesi untuk muatan berikutnya
+function kitirSesiBaru(){
+  if(!kitirAktif && !paletSesi.length) return;
+  if(!confirm('Mulai sesi baru? Sesi kitir ini akan dikosongkan.')) return;
+  paletSesi=[];
+  kitirAktif=null;
+  document.getElementById('rincianKitir').innerHTML='';
+  document.getElementById('kitirNoTampil').textContent='';
+  document.getElementById('btnSelesai').disabled=false;
+  document.getElementById('btnCetak').style.display='none';
+  document.getElementById('btnSesiBaru').style.display='none';
+  kitirUpdateSesiInfo();
+  setMsg('Sesi baru dimulai. Lanjut muat palet berikutnya.','ok');
+}
+
 document.getElementById('fTanggal').value=tanggalHariIni();
+kitirUpdateSesiInfo();
 </script>
 </body>
 </html>
