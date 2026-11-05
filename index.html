@@ -130,6 +130,14 @@
     <button id="btnSelesai" class="btn" onclick="kitirSelesaiMuat()">Selesai Muat</button>
   </div>
 
+<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+  <div class="judul">Cetak Ulang Kitir Lama</div>
+  <div class="manualRow">
+    <input type="text" id="fKitirCari" placeholder="ketik No. Kitir, misal KTR-20261105-001" autocapitalize="characters">
+    <button id="btnKitirCari" type="button" onclick="kitirCariLama()">CARI</button>
+  </div>
+</div>
+
   <div id="rincianKitir"></div>
   <button id="btnCetak" class="btn" onclick="kitirCetak()">Cetak Kitir</button>
   <button id="btnSesiBaru" class="btn" onclick="kitirSesiBaru()">Selesai &amp; Mulai Sesi Baru</button>
@@ -150,13 +158,12 @@
 <script>
 var WEBAPP_URL='https://script.google.com/macros/s/AKfycbxp5L0rGdC0ki2M18YjNnylr0aAOXDLCzW5k84fJhT7aCkdlFrPeOY2tH0b75MMjDJh/exec';
 
-var muatItem=null;   // palet FG yang dipilih (termasuk sisa)
-var muatLast=null;   // data yang sudah tersimpan
+var muatItem=null;
+var muatLast=null;
 var html5QrCode=null;
 
-// Kitir
-var paletSesi=[];    // [{palet, tf, produk, qty, tujuan}] tiap muat yang tersimpan di sesi ini
-var kitirAktif=null; // No. Kitir yang sudah dibuat
+var paletSesi=[];
+var kitirAktif=null;
 var SESI_KEY='muatSesiKitir';
 
 function setMsg(t,c){ var m=document.getElementById('msg'); m.textContent=t; m.className=c||''; }
@@ -168,7 +175,6 @@ function jamSekarang(){
 function fmtTglIndo(iso){ var p=String(iso).split('-'); return p.length===3 ? p[2]+'-'+p[1]+'-'+p[0] : iso; }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// Cari No. Palet di FG (server mengembalikan item beserta sisa)
 function muatCari(kode){
   kode=String(kode||'').trim();
   if(!kode){ setMsg('No. Palet kosong','bad'); return; }
@@ -184,10 +190,7 @@ function muatCari(kode){
     })
     .catch(e=>{ setMsg('Gagal mencari: '+e.message,'bad'); });
 }
-
-function muatCariManual(){
-  muatCari(document.getElementById('fManual').value);
-}
+function muatCariManual(){ muatCari(document.getElementById('fManual').value); }
 
 function muatPilih(it){
   muatItem=it;
@@ -199,17 +202,15 @@ function muatPilih(it){
   document.getElementById('iTglProd').textContent=it.tglProduksi;
   document.getElementById('iShiftProd').textContent=it.shiftProduksi;
   document.getElementById('iJamProd').textContent=it.jamProduksi;
-  document.getElementById('fQty').value=it.sisa;   // default: muat semua sisa
+  document.getElementById('fQty').value=it.sisa;
   document.getElementById('infoBox').style.display='block';
   setMsg('Palet dipilih. Atur Qty Muat, isi operator, lalu Simpan.','ok');
 }
-
 function muatPilihNull(){
   muatItem=null;
   document.getElementById('infoBox').style.display='none';
 }
 
-// Scan barcode palet
 function muatBukaScan(){
   if(muatLast){ setMsg('Data sudah tersimpan. Tekan Kosongkan Form dulu.','bad'); return; }
   document.getElementById('scanModal').style.display='block';
@@ -217,10 +218,7 @@ function muatBukaScan(){
   html5QrCode.start(
     {facingMode:'environment'},
     {fps:10, qrbox:{width:280,height:120}},
-    function(decoded){
-      muatTutupScan();
-      muatCari(String(decoded).trim());
-    },
+    function(decoded){ muatTutupScan(); muatCari(String(decoded).trim()); },
     function(){}
   ).catch(function(e){
     document.getElementById('scanModal').style.display='none';
@@ -267,19 +265,10 @@ function muatSimpan(){
   }
 
   var payload={
-    _app:'muat',
-    tanggal:tanggal,
-    jam:jamSekarang(),
-    shift:shift,
-    palet:muatItem.palet,
-    tf:muatItem.tf,
-    namaProduk:muatItem.namaProduk,
-    qty:qty,
-    namaMuat:namaMuat,
-    tujuan:tujuan,
-    keterangan:ket,
-    jamProduksi:muatItem.jamProduksi,
-    tglProduksi:muatItem.tglProduksi,
+    _app:'muat', tanggal:tanggal, jam:jamSekarang(), shift:shift,
+    palet:muatItem.palet, tf:muatItem.tf, namaProduk:muatItem.namaProduk,
+    qty:qty, namaMuat:namaMuat, tujuan:tujuan, keterangan:ket,
+    jamProduksi:muatItem.jamProduksi, tglProduksi:muatItem.tglProduksi,
     shiftProduksi:muatItem.shiftProduksi
   };
 
@@ -296,7 +285,6 @@ function muatSimpan(){
         muatLast.sisaSetelah=res.sisa;
         muatKunci(true);
         document.getElementById('btnShare').disabled=false;
-        // Masukkan ke rincian sesi kitir
         paletSesi.push({palet:payload.palet, tf:payload.tf, produk:payload.namaProduk, qty:qty, tujuan:tujuan});
         kitirSimpanLokal();
         kitirRenderSesi();
@@ -326,7 +314,6 @@ function muatPesan(){
   if(muatLast && muatLast.namaMuat) teks+="Operator Muat: "+muatLast.namaMuat+"\n";
   return teks;
 }
-
 function muatShareWa(){
   if(!paletSesi.length){ setMsg('Belum ada muatan di sesi ini','bad'); return; }
   window.open("https://wa.me/?text="+encodeURIComponent(muatPesan()),"_blank");
@@ -346,7 +333,6 @@ function muatKosongkan(){
 
 /* ================= KITIR ================= */
 
-// Simpan sesi di perangkat agar tidak hilang saat halaman tertutup
 function kitirSimpanLokal(){
   try{ localStorage.setItem(SESI_KEY, JSON.stringify({sesi:paletSesi, kitir:kitirAktif})); }catch(e){}
 }
@@ -357,7 +343,6 @@ function kitirMuatLokal(){
   }catch(e){}
 }
 
-// Tampilkan rincian sesi (muatan yang sudah tersimpan, sebelum kitir dibuat)
 function kitirRenderSesi(){
   var info=document.getElementById('sesiInfo');
   var tabel=document.getElementById('sesiTabel');
@@ -396,7 +381,6 @@ function kitirRenderSesi(){
   document.getElementById('btnSelesai').disabled=false;
 }
 
-// Tombol Tambah Muatan: kosongkan form, sesi tetap
 function kitirTambahMuatan(){
   if(kitirAktif){ setMsg('Kitir sudah dibuat. Mulai sesi baru dulu.','bad'); return; }
   muatKosongkan();
@@ -404,7 +388,6 @@ function kitirTambahMuatan(){
   setMsg('Siap untuk muatan berikutnya. Scan palet.','ok');
 }
 
-// Selesai Muat: buat No. Kitir dari seluruh muatan di sesi, lalu tampilkan rincian dari server
 async function kitirSelesaiMuat(){
   if(kitirAktif){ setMsg('Kitir sudah dibuat. Cetak atau mulai sesi baru.','bad'); return; }
   if(!paletSesi.length){ setMsg('Belum ada muatan di sesi ini.','bad'); return; }
@@ -433,18 +416,42 @@ async function kitirSelesaiMuat(){
 
   kitirAktif=r.kitir;
   kitirSimpanLokal();
-
-  var totalQty=0;
-  var html='<div class="noKit">No. Kitir: '+esc(r.kitir)+'</div><table><tr><th>Palet</th><th>TF</th><th>Produk</th><th>Qty</th></tr>';
-  r.items.forEach(function(it){
-    totalQty+=Number(it.qty)||0;
-    html+='<tr><td>'+esc(it.palet)+'</td><td>'+esc(it.tf)+'</td><td>'+esc(it.produk)+'</td><td>'+esc(it.qty)+'</td></tr>';
-  });
-  html+='<tr class="tot"><td colspan="3">Total '+r.items.length+' muatan</td><td>'+totalQty+'</td></tr></table>';
-  document.getElementById('rincianKitir').innerHTML=html;
+  kitirTampilRincian(r.kitir, r.items);
   document.getElementById('sesiTabel').innerHTML='';
   kitirRenderSesi();
   setMsg('Kitir '+r.kitir+' dibuat. Cek rincian, lalu Cetak Kitir.','ok');
+}
+
+// Tampilkan rincian kitir (dipakai saat baru dibuat maupun saat dicari ulang)
+function kitirTampilRincian(kitir, items){
+  var totalQty=0;
+  var html='<div class="noKit">No. Kitir: '+esc(kitir)+'</div><table><tr><th>Palet</th><th>TF</th><th>Produk</th><th>Qty</th></tr>';
+  items.forEach(function(it){
+    totalQty+=Number(it.qty)||0;
+    html+='<tr><td>'+esc(it.palet)+'</td><td>'+esc(it.tf)+'</td><td>'+esc(it.produk)+'</td><td>'+esc(it.qty)+'</td></tr>';
+  });
+  html+='<tr class="tot"><td colspan="3">Total '+items.length+' muatan</td><td>'+totalQty+'</td></tr></table>';
+  document.getElementById('rincianKitir').innerHTML=html;
+}
+
+// Cari kitir lama dari server untuk dicetak ulang (hanya membaca)
+async function kitirCariLama(){
+  var kode=document.getElementById('fKitirCari').value.trim().toUpperCase();
+  if(!kode){ setMsg('Ketik No. Kitir dulu.','bad'); return; }
+  if(kitirAktif){ setMsg('Selesaikan atau mulai sesi baru dulu sebelum mencari kitir lama.','bad'); return; }
+
+  setMsg('Mencari '+kode+'...','');
+  try{
+    var res=await fetch(WEBAPP_URL+'?action=kitirCari&kitir='+encodeURIComponent(kode));
+    var r=await res.json();
+    if(!r.ok){ setMsg('❌ '+r.error,'bad'); return; }
+    kitirAktif=r.kitir;
+    kitirSimpanLokal();
+    kitirTampilRincian(r.kitir, r.items);
+    document.getElementById('sesiTabel').innerHTML='';
+    kitirRenderSesi();
+    setMsg('Kitir '+r.kitir+' ditemukan. Tekan Cetak Kitir untuk cetak ulang.','ok');
+  }catch(e){ setMsg('Gagal mencari: '+e.message,'bad'); }
 }
 
 // Cetak: hanya barcode dan No. Kitir (rincian tidak ikut dicetak)
@@ -455,7 +462,6 @@ function kitirCetak(){
   window.print();
 }
 
-// Setelah kitir selesai dicetak, kosongkan sesi untuk muatan berikutnya
 function kitirSesiBaru(){
   if(!kitirAktif && !paletSesi.length) return;
   if(!confirm('Mulai sesi baru? Daftar muatan dan kitir ini akan dikosongkan.')) return;
@@ -472,5 +478,3 @@ document.getElementById('fTanggal').value=tanggalHariIni();
 kitirMuatLokal();
 kitirRenderSesi();
 </script>
-</body>
-</html>
