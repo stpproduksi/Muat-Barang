@@ -45,13 +45,18 @@
   /* Kartu kitir */
   #kitirCard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;max-width:420px;margin:14px auto 0;}
   #kitirCard .judul{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mute);margin-bottom:8px;}
-  #sesiInfo{font-size:12.5px;color:var(--mute);margin-bottom:6px;}
-  #rincianKitir table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
-  #rincianKitir th,#rincianKitir td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;}
-  #rincianKitir .noKit{font-weight:700;font-family:'Roboto Mono',monospace;margin-top:8px;}
-  #btnSelesai{background:#7C3AED;margin-top:0;}
+  #sesiInfo{font-size:12.5px;color:var(--mute);margin-bottom:8px;}
+  #sesiTabel table,#rincianKitir table{width:100%;border-collapse:collapse;font-size:13px;}
+  #sesiTabel th,#sesiTabel td,#rincianKitir th,#rincianKitir td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;}
+  #sesiTabel .tot td{font-weight:700;border-bottom:none;}
+  #rincianKitir .noKit{font-weight:700;font-family:'Roboto Mono',monospace;margin:10px 0 4px;}
+  .btnRow{display:flex;gap:8px;}
+  .btnRow .btn{margin-top:8px;}
+  #btnTambah{background:#fff;color:var(--accent);border:1px solid var(--accent);}
+  #btnSelesai{background:#7C3AED;}
   #btnCetak{background:var(--accent);display:none;}
   #btnSesiBaru{background:#fff;color:var(--mute);border:1px solid var(--line);display:none;}
+  #rincianKitir{margin-top:6px;}
 
   /* Area cetak: hanya tampil saat print */
   #kitirPrint{display:none;text-align:center;padding:20px;}
@@ -117,8 +122,14 @@
 <!-- KARTU KITIR -->
 <div id="kitirCard">
   <div class="judul">Kitir Pengiriman</div>
-  <div id="sesiInfo">Palet dimuat di sesi ini: 0</div>
-  <button id="btnSelesai" class="btn" onclick="kitirSelesaiMuat()">Selesai Muat</button>
+  <div id="sesiInfo">Belum ada muatan di sesi ini.</div>
+  <div id="sesiTabel"></div>
+
+  <div class="btnRow" id="rowAwal">
+    <button id="btnTambah" class="btn" onclick="kitirTambahMuatan()">+ Tambah Muatan</button>
+    <button id="btnSelesai" class="btn" onclick="kitirSelesaiMuat()">Selesai Muat</button>
+  </div>
+
   <div id="rincianKitir"></div>
   <button id="btnCetak" class="btn" onclick="kitirCetak()">Cetak Kitir</button>
   <button id="btnSesiBaru" class="btn" onclick="kitirSesiBaru()">Selesai &amp; Mulai Sesi Baru</button>
@@ -144,8 +155,9 @@ var muatLast=null;   // data yang sudah tersimpan
 var html5QrCode=null;
 
 // Kitir
-var paletSesi=[];    // palet yang berhasil disimpan di sesi ini
+var paletSesi=[];    // [{palet, tf, produk, qty, tujuan}] tiap muat yang tersimpan di sesi ini
 var kitirAktif=null; // No. Kitir yang sudah dibuat
+var SESI_KEY='muatSesiKitir';
 
 function setMsg(t,c){ var m=document.getElementById('msg'); m.textContent=t; m.className=c||''; }
 function tanggalHariIni(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -154,6 +166,7 @@ function jamSekarang(){
   return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');
 }
 function fmtTglIndo(iso){ var p=String(iso).split('-'); return p.length===3 ? p[2]+'-'+p[1]+'-'+p[0] : iso; }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // Cari No. Palet di FG (server mengembalikan item beserta sisa)
 function muatCari(kode){
@@ -247,6 +260,11 @@ function muatSimpan(){
   if(!namaMuat){ setMsg('Nama operator muat belum diisi','bad'); return; }
   if(!(qty>0)){ setMsg('Qty muat harus lebih dari 0','bad'); return; }
   if(qty>muatItem.sisa){ setMsg('Qty melebihi sisa palet ('+muatItem.sisa+')','bad'); return; }
+  if(kitirAktif){ setMsg('Kitir sudah dibuat. Cetak atau mulai sesi baru dulu.','bad'); return; }
+  if(paletSesi.length && paletSesi[0].tujuan!==tujuan){
+    setMsg('Tujuan harus sama dengan sesi ini ('+paletSesi[0].tujuan+'). Selesai Muat atau mulai sesi baru dulu.','bad');
+    return;
+  }
 
   var payload={
     _app:'muat',
@@ -278,10 +296,11 @@ function muatSimpan(){
         muatLast.sisaSetelah=res.sisa;
         muatKunci(true);
         document.getElementById('btnShare').disabled=false;
-        // Masukkan ke sesi kitir
-        paletSesi.push(payload.palet);
-        kitirUpdateSesiInfo();
-        setMsg('✅ Tersimpan. Sisa palet: '+res.sisa+'. Tekan Share WA, lalu Kosongkan Form.','ok');
+        // Masukkan ke rincian sesi kitir
+        paletSesi.push({palet:payload.palet, tf:payload.tf, produk:payload.namaProduk, qty:qty, tujuan:tujuan});
+        kitirSimpanLokal();
+        kitirRenderSesi();
+        setMsg('✅ Tersimpan. Sisa palet: '+res.sisa+'. Tekan Share WA, lalu Tambah Muatan atau Selesai Muat.','ok');
       } else {
         btn.disabled=false;
         setMsg('❌ Gagal: '+(res.error||'tidak diketahui'),'bad');
@@ -317,44 +336,110 @@ function muatKosongkan(){
   document.getElementById('scanInfo').textContent='';
   document.getElementById('btnShare').disabled=true;
   muatKunci(false);
+  document.getElementById('btnSave').disabled=false;
   setMsg('Form dikosongkan. Scan palet untuk input berikutnya.','ok');
 }
 
 /* ================= KITIR ================= */
 
-function kitirUpdateSesiInfo(){
-  var uniq=[...new Set(paletSesi)];
-  document.getElementById('sesiInfo').textContent='Palet dimuat di sesi ini: '+uniq.length;
+// Simpan sesi di perangkat agar tidak hilang saat halaman tertutup
+function kitirSimpanLokal(){
+  try{ localStorage.setItem(SESI_KEY, JSON.stringify({sesi:paletSesi, kitir:kitirAktif})); }catch(e){}
+}
+function kitirMuatLokal(){
+  try{
+    var s=JSON.parse(localStorage.getItem(SESI_KEY)||'null');
+    if(s){ paletSesi=s.sesi||[]; kitirAktif=s.kitir||null; }
+  }catch(e){}
 }
 
-// Selesai Muat: buat No. Kitir dari palet di sesi, lalu tampilkan rincian untuk dicek
+// Tampilkan rincian sesi (muatan yang sudah tersimpan, sebelum kitir dibuat)
+function kitirRenderSesi(){
+  var info=document.getElementById('sesiInfo');
+  var tabel=document.getElementById('sesiTabel');
+  var rowAwal=document.getElementById('rowAwal');
+
+  if(kitirAktif){
+    info.textContent='Kitir sudah dibuat. Cek rincian, lalu Cetak Kitir.';
+    tabel.innerHTML='';
+    rowAwal.style.display='none';
+    document.getElementById('btnCetak').style.display='block';
+    document.getElementById('btnSesiBaru').style.display='block';
+    return;
+  }
+
+  rowAwal.style.display='flex';
+  document.getElementById('btnCetak').style.display='none';
+  document.getElementById('btnSesiBaru').style.display='none';
+  document.getElementById('rincianKitir').innerHTML='';
+
+  if(!paletSesi.length){
+    info.textContent='Belum ada muatan di sesi ini.';
+    tabel.innerHTML='';
+    document.getElementById('btnSelesai').disabled=true;
+    return;
+  }
+
+  var totalQty=0;
+  var html='<table><tr><th>Palet</th><th>TF</th><th>Produk</th><th>Qty</th></tr>';
+  paletSesi.forEach(function(p){
+    totalQty+=Number(p.qty)||0;
+    html+='<tr><td>'+esc(p.palet)+'</td><td>'+esc(p.tf)+'</td><td>'+esc(p.produk)+'</td><td>'+esc(p.qty)+'</td></tr>';
+  });
+  html+='<tr class="tot"><td colspan="3">Total '+paletSesi.length+' muatan</td><td>'+totalQty+'</td></tr></table>';
+  info.textContent='Tujuan: '+paletSesi[0].tujuan;
+  tabel.innerHTML=html;
+  document.getElementById('btnSelesai').disabled=false;
+}
+
+// Tombol Tambah Muatan: kosongkan form, sesi tetap
+function kitirTambahMuatan(){
+  if(kitirAktif){ setMsg('Kitir sudah dibuat. Mulai sesi baru dulu.','bad'); return; }
+  muatKosongkan();
+  window.scrollTo({top:0,behavior:'smooth'});
+  setMsg('Siap untuk muatan berikutnya. Scan palet.','ok');
+}
+
+// Selesai Muat: buat No. Kitir dari seluruh muatan di sesi, lalu tampilkan rincian dari server
 async function kitirSelesaiMuat(){
   if(kitirAktif){ setMsg('Kitir sudah dibuat. Cetak atau mulai sesi baru.','bad'); return; }
-  if(!paletSesi.length){ setMsg('Belum ada palet yang dimuat di sesi ini.','bad'); return; }
+  if(!paletSesi.length){ setMsg('Belum ada muatan di sesi ini.','bad'); return; }
 
   var tgl=document.getElementById('fTanggal').value||tanggalHariIni();
-  var payload={_app:'kitirbuat', tanggal:tgl, palets:[...new Set(paletSesi)]};
+  var uniqPalet=[];
+  paletSesi.forEach(function(p){ if(uniqPalet.indexOf(p.palet)===-1) uniqPalet.push(p.palet); });
+  var payload={_app:'kitirbuat', tanggal:tgl, palets:uniqPalet};
+
+  document.getElementById('btnSelesai').disabled=true;
   setMsg('Membuat kitir...','');
 
   var r;
   try{
     var res=await fetch(WEBAPP_URL+'?action=save&payload='+encodeURIComponent(JSON.stringify(payload)));
     r=await res.json();
-  }catch(e){ setMsg('Gagal membuat kitir: '+e.message,'bad'); return; }
+  }catch(e){
+    document.getElementById('btnSelesai').disabled=false;
+    setMsg('Gagal membuat kitir: '+e.message,'bad'); return;
+  }
 
-  if(!r.ok){ setMsg('❌ '+r.error,'bad'); return; }
+  if(!r.ok){
+    document.getElementById('btnSelesai').disabled=false;
+    setMsg('❌ '+r.error,'bad'); return;
+  }
 
   kitirAktif=r.kitir;
-  var html='<table><tr><th>Palet</th><th>TF</th><th>Produk</th><th>Qty</th></tr>';
-  r.items.forEach(function(it){
-    html+='<tr><td>'+it.palet+'</td><td>'+it.tf+'</td><td>'+it.produk+'</td><td>'+it.qty+'</td></tr>';
-  });
-  html+='</table><div class="noKit">No. Kitir: '+r.kitir+'</div>';
-  document.getElementById('rincianKitir').innerHTML=html;
+  kitirSimpanLokal();
 
-  document.getElementById('btnSelesai').disabled=true;
-  document.getElementById('btnCetak').style.display='block';
-  document.getElementById('btnSesiBaru').style.display='block';
+  var totalQty=0;
+  var html='<div class="noKit">No. Kitir: '+esc(r.kitir)+'</div><table><tr><th>Palet</th><th>TF</th><th>Produk</th><th>Qty</th></tr>';
+  r.items.forEach(function(it){
+    totalQty+=Number(it.qty)||0;
+    html+='<tr><td>'+esc(it.palet)+'</td><td>'+esc(it.tf)+'</td><td>'+esc(it.produk)+'</td><td>'+esc(it.qty)+'</td></tr>';
+  });
+  html+='<tr class="tot"><td colspan="3">Total '+r.items.length+' muatan</td><td>'+totalQty+'</td></tr></table>';
+  document.getElementById('rincianKitir').innerHTML=html;
+  document.getElementById('sesiTabel').innerHTML='';
+  kitirRenderSesi();
   setMsg('Kitir '+r.kitir+' dibuat. Cek rincian, lalu Cetak Kitir.','ok');
 }
 
@@ -369,20 +454,19 @@ function kitirCetak(){
 // Setelah kitir selesai dicetak, kosongkan sesi untuk muatan berikutnya
 function kitirSesiBaru(){
   if(!kitirAktif && !paletSesi.length) return;
-  if(!confirm('Mulai sesi baru? Sesi kitir ini akan dikosongkan.')) return;
+  if(!confirm('Mulai sesi baru? Daftar muatan dan kitir ini akan dikosongkan.')) return;
   paletSesi=[];
   kitirAktif=null;
-  document.getElementById('rincianKitir').innerHTML='';
+  try{ localStorage.removeItem(SESI_KEY); }catch(e){}
   document.getElementById('kitirNoTampil').textContent='';
-  document.getElementById('btnSelesai').disabled=false;
-  document.getElementById('btnCetak').style.display='none';
-  document.getElementById('btnSesiBaru').style.display='none';
-  kitirUpdateSesiInfo();
+  document.getElementById('rincianKitir').innerHTML='';
+  kitirRenderSesi();
   setMsg('Sesi baru dimulai. Lanjut muat palet berikutnya.','ok');
 }
 
 document.getElementById('fTanggal').value=tanggalHariIni();
-kitirUpdateSesiInfo();
+kitirMuatLokal();
+kitirRenderSesi();
 </script>
 </body>
 </html>
