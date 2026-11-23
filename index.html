@@ -15,6 +15,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   body{font-family:Arial,sans-serif;background:#F3F4F6;margin:0;padding:12px;font-size:15px;color:#14181F}
   h1{font-size:17px;margin:4px 0 10px}
@@ -29,14 +30,34 @@ if ('serviceWorker' in navigator) {
   .btn{display:block;width:100%;padding:12px;margin-top:8px;border:0;border-radius:8px;background:#1D4E89;color:#fff;font-size:15px;font-weight:bold}
   .btn:disabled{opacity:.5}
   .btn.g{background:#157F3C}.btn.o{background:#fff;color:#1D4E89;border:1px solid #1D4E89}
+  .btn.wa{background:#25D366}.btn.k{background:#111827}
   .r{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
   .r b{font-family:monospace}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px 4px;border-bottom:1px solid #E3E6EA;text-align:left;vertical-align:middle}
+  th{font-size:10.5px;color:#5B6472;text-transform:uppercase}
+  td input{width:90px;padding:7px;font-size:14px;border:1px solid #E3E6EA;border-radius:6px;text-align:right;margin:0}
+  td input:disabled{background:#F3F4F6;color:#5B6472}
+  .plus{color:#157F3C;font-weight:700}.minus{color:#B91C1C;font-weight:700}
+  #infoBox{display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:11px 12px;margin-bottom:12px;font-size:12.5px}
+  #catatanBox{font-size:12.5px;color:#8a5a00;margin-top:8px}
+  .manualRow{display:flex;gap:6px}
+  .manualRow input{flex:1;margin:0}
   #login{position:fixed;inset:0;background:#F3F4F6;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:99}
   #login .logo-besar{width:180px;height:180px;border-radius:50%;background:#fff;box-shadow:0 2px 8px #0002;margin-bottom:12px}
   #login h2{font-size:18px;margin:0 0 16px;color:#1D4E89}
   #login input{max-width:260px;text-align:center;font-size:22px;letter-spacing:6px}
   #login .btn{max-width:260px;width:100%}
+  #scanModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:98;padding:16px}
+  #scanBox{background:#fff;border-radius:12px;padding:12px;max-width:420px;margin:10% auto 0}
+  #reader{width:100%;max-width:360px;aspect-ratio:1/1;margin:0 auto;overflow:hidden;border-radius:12px;background:#000}
+  #reader video{width:100%!important;height:100%!important;object-fit:cover}
+  #kitirPrintArea{display:none}
+  .kitir{width:54mm;font-family:monospace;color:#000}
+  @media print{
+    body *{visibility:hidden}
+  }
 </style>
 </head>
 <body>
@@ -96,21 +117,58 @@ if ('serviceWorker' in navigator) {
 <!-- TERIMA BARANG -->
 <section id="terima" class="tab">
   <div class="card">
-    <div class="bad">Menu Terima Barang belum dilengkapi. Kirim kode terima dari apk lama.</div>
+    <div style="font-size:12px;color:#5B6472;margin-bottom:8px">Scan barcode No. Kitir, isi qty yang diterima per palet, lalu simpan konfirmasi.</div>
+    <button class="btn k" onclick="bukaScan()">📷 Scan Barcode Kitir</button>
+    <div class="manualRow">
+      <input type="text" id="fKitir" placeholder="atau ketik No. Kitir" autocapitalize="characters">
+      <button class="btn" style="width:auto;margin-top:0;padding:10px 14px" onclick="cariKitirManual()">CARI</button>
+    </div>
+    <div id="scanInfo" style="font-size:12px;color:#5B6472;margin-top:6px;min-height:16px"></div>
+    <div id="msg" style="font-size:13px;margin-top:6px;min-height:16px"></div>
+  </div>
+
+  <div id="area" class="card" style="display:none">
+    <div id="infoBox">
+      <div class="r"><span>No. Kitir</span><b id="iKitir">-</b></div>
+      <div class="r"><span>Tujuan</span><b id="iTujuan">-</b></div>
+      <div class="r"><span>Jumlah Palet</span><b id="iJml">-</b></div>
+    </div>
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="tabel"></tbody>
+    </table>
+    <div id="catatanBox"></div>
+    <div style="margin-top:14px">
+      <label>Nama Penerima</label>
+      <input type="text" id="fNama" placeholder="Nama penerima">
+    </div>
+    <button id="btnSimpan" class="btn g" onclick="simpanTerima()">Simpan Konfirmasi</button>
+    <button id="btnBaru" class="btn o" style="display:none" onclick="kosongkanTerima()">Terima Kitir Lain</button>
+    <button class="btn wa" onclick="terimaShareWa()">Share WA</button>
   </div>
 </section>
+
+<div id="scanModal"><div id="scanBox">
+  <div style="font-weight:bold;text-align:center;margin-bottom:8px">Scan Barcode Kitir</div>
+  <div id="reader"></div>
+  <button class="btn o" onclick="tutupScan()">Tutup Kamera</button>
+</div></div>
 
 <script>
 var URL_EXEC = 'https://script.google.com/macros/s/AKfycbxp5L0rGdC0ki2M18YjNnylr0aAOXDLCzW5k84fJhT7aCkdlFrPeOY2tH0b75MMjDJh/exec';
 var KEY = '';
 var MENU_USER = [];
 var mItem = null;
+var kitirAktif = null;
+var itemsAktif = [];
+var html5QrCode = null;
 
 var $ = function (id) { return document.getElementById(id); };
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function hariIni() { var d = new Date(), z = function (n) { return String(n).padStart(2, '0'); }; return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); }
 function jamHM() { var n = new Date(); return String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0'); }
 function fmtN(n) { return Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 }); }
+function tglIndo(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : (iso || ''); }
 
 function api(params) {
   var q = new URLSearchParams(Object.assign({ k: KEY }, params));
@@ -210,6 +268,134 @@ function mKosongkan() {
   $('mForm').style.display = 'none';
   $('mTgl').value = hariIni();
   mMsg('Form dikosongkan.', 'ok');
+}
+
+/* ===== TERIMA BARANG ===== */
+
+function setMsg(t, c) { $('msg').textContent = t; $('msg').className = c || ''; }
+
+function cariKitir(kode) {
+  kode = String(kode || '').trim().toUpperCase();
+  if (!kode) { setMsg('No. Kitir kosong', 'bad'); return; }
+  setMsg('Mencari ' + kode + '...', '');
+  $('scanInfo').textContent = 'No. Kitir: ' + kode;
+  api({ action: 'kitirCari', kitir: kode }).then(function (res) {
+    if (res && res.ok) { tampilKitir(res); }
+    else {
+      $('area').style.display = 'none';
+      setMsg((res && res.error) || 'Kitir tidak ditemukan', 'bad');
+    }
+  }).catch(function (e) { setMsg('Gagal terhubung: ' + e.message, 'bad'); });
+}
+
+function cariKitirManual() { cariKitir($('fKitir').value); }
+
+function tampilKitir(res) {
+  kitirAktif = res.kitir;
+  itemsAktif = res.items;
+  $('fKitir').value = res.kitir;
+  $('area').style.display = 'block';
+  $('iKitir').textContent = res.kitir;
+  $('iTujuan').textContent = res.items[0] ? res.items[0].tujuan : '-';
+  $('iJml').textContent = res.items.length;
+  $('infoBox').style.display = 'block';
+
+  var thead, tbody = '';
+  if (res.sudahTerima) {
+    thead = '<tr><th>Palet</th><th>Produk</th><th>Muat</th><th>Diterima</th><th>Status</th></tr>';
+    res.items.forEach(function (it) {
+      var cls = it.status === 'Diterima' ? 'plus' : 'minus';
+      tbody += '<tr><td>' + esc(it.palet) + '</td><td>' + esc(it.produk) + '</td><td>' + fmtN(it.qty) +
+        '</td><td>' + fmtN(it.terima) + '</td><td class="' + cls + '">' + esc(it.status) + '</td></tr>';
+    });
+    $('catatanBox').innerHTML = '';
+    $('fNama').disabled = true;
+    $('btnSimpan').style.display = 'none';
+    $('btnBaru').style.display = 'block';
+    setMsg('Kitir ini sudah dikonfirmasi terima.', 'ok');
+  } else {
+    thead = '<tr><th>Palet</th><th>Produk</th><th>Muat</th><th>Diterima</th><th>Selisih</th></tr>';
+    res.items.forEach(function (it) {
+      tbody += '<tr><td>' + esc(it.palet) + '</td><td>' + esc(it.produk) + '</td><td>' + fmtN(it.qty) + '</td>' +
+        '<td><input type="number" step="any" min="0" id="in_' + it.row + '" oninput="hitungSelisih(' + it.row + ',' + Number(it.qty) + ')"></td>' +
+        '<td id="sel_' + it.row + '">-</td></tr>';
+    });
+    $('catatanBox').innerHTML = '';
+    $('fNama').disabled = false;
+    $('fNama').value = '';
+    $('btnSimpan').style.display = 'block';
+    $('btnBaru').style.display = 'none';
+    setMsg('Isi qty diterima per palet, lalu simpan.', 'ok');
+  }
+  $('thead').innerHTML = thead;
+  $('tabel').innerHTML = tbody;
+}
+
+function hitungSelisih(row, muat) {
+  var v = parseFloat($('in_' + row).value);
+  var cell = $('sel_' + row);
+  if (isNaN(v)) { cell.textContent = '-'; cell.className = ''; return; }
+  var s = v - muat;
+  cell.textContent = (s > 0 ? '+' : '') + fmtN(s);
+  cell.className = s === 0 ? '' : (s > 0 ? 'plus' : 'minus');
+}
+
+function simpanTerima() {
+  var nama = $('fNama').value.trim();
+  if (!nama) { setMsg('Nama penerima belum diisi', 'bad'); return; }
+  var items = itemsAktif.map(function (it) { return { row: it.row, terima: $('in_' + it.row).value }; });
+  if (items.some(function (x) { return x.terima === ''; })) { setMsg('Isi qty diterima untuk semua palet', 'bad'); return; }
+
+  var payload = { _app: 'kitirterima', kitir: kitirAktif, tanggal: hariIni(), jam: jamHM(), nama: nama, items: items };
+  $('btnSimpan').disabled = true;
+  setMsg('Menyimpan...', '');
+  api({ action: 'save', payload: JSON.stringify(payload) }).then(function (res) {
+    $('btnSimpan').disabled = false;
+    if (res && res.ok) {
+      cariKitir(kitirAktif);
+      setMsg('✅ Konfirmasi terima tersimpan.', 'ok');
+    } else {
+      setMsg('❌ Gagal: ' + ((res && res.error) || 'tidak diketahui'), 'bad');
+    }
+  }).catch(function (e) { $('btnSimpan').disabled = false; setMsg('❌ Gagal: ' + e.message, 'bad'); });
+}
+
+function kosongkanTerima() {
+  kitirAktif = null; itemsAktif = [];
+  $('fKitir').value = '';
+  $('scanInfo').textContent = '';
+  $('area').style.display = 'none';
+  $('btnSimpan').disabled = false;
+  setMsg('Siap untuk kitir berikutnya.', 'ok');
+}
+
+function terimaShareWa() {
+  var it = itemsAktif;
+  if (!it.length) { setMsg('Belum ada data kitir.', 'bad'); return; }
+  var t = '📦 TERIMA BARANG\nNo. Kitir: ' + kitirAktif + '\nTujuan: ' + (it[0].tujuan || '-') + '\n';
+  it.forEach(function (x) {
+    var sel = Number(x.selisih) || 0;
+    t += '- ' + x.palet + ' | ' + x.produk + ' | Muat ' + fmtN(x.muatAwal) + ' | Terima ' + fmtN(x.terima) +
+      ' | Selisih ' + (sel > 0 ? '+' : '') + fmtN(sel) + ' | ' + x.status + '\n';
+  });
+  window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank');
+}
+
+function bukaScan() {
+  $('scanModal').style.display = 'block';
+  html5QrCode = new Html5Qrcode('reader');
+  html5QrCode.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 280, height: 120 } },
+    function (decoded) {
+      tutupScan();
+      $('fKitir').value = String(decoded).trim();
+      cariKitir(decoded);
+    }, function () {})
+    .catch(function (e) { $('scanModal').style.display = 'none'; setMsg('Kamera gagal dibuka: ' + e, 'bad'); });
+}
+
+function tutupScan() {
+  $('scanModal').style.display = 'none';
+  if (html5QrCode) { html5QrCode.stop().then(function () { html5QrCode.clear(); }).catch(function () {}); html5QrCode = null; }
 }
 </script>
 </body>
