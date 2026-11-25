@@ -15,7 +15,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   body{font-family:Arial,sans-serif;background:#F3F4F6;margin:0;padding:12px;font-size:15px;color:#14181F}
   h1{font-size:17px;margin:4px 0 10px}
@@ -30,7 +29,7 @@ if ('serviceWorker' in navigator) {
   .btn{display:block;width:100%;padding:12px;margin-top:8px;border:0;border-radius:8px;background:#1D4E89;color:#fff;font-size:15px;font-weight:bold}
   .btn:disabled{opacity:.5}
   .btn.g{background:#157F3C}.btn.o{background:#fff;color:#1D4E89;border:1px solid #1D4E89}
-  .btn.wa{background:#25D366}.btn.k{background:#111827}
+  .btn.k{background:#111827}
   .r{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
   .r b{font-family:monospace}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -51,13 +50,8 @@ if ('serviceWorker' in navigator) {
   #login .btn{max-width:260px;width:100%}
   #scanModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:98;padding:16px}
   #scanBox{background:#fff;border-radius:12px;padding:12px;max-width:420px;margin:10% auto 0}
-  #reader{width:100%;max-width:360px;aspect-ratio:1/1;margin:0 auto;overflow:hidden;border-radius:12px;background:#000}
+  #reader{width:260px;height:260px;max-width:100%;margin:0 auto;overflow:hidden;border-radius:12px;background:#000;position:relative}
   #reader video{width:100%!important;height:100%!important;object-fit:cover}
-  #kitirPrintArea{display:none}
-  .kitir{width:54mm;font-family:monospace;color:#000}
-  @media print{
-    body *{visibility:hidden}
-  }
 </style>
 </head>
 <body>
@@ -87,7 +81,8 @@ if ('serviceWorker' in navigator) {
         <select id="mShift"><option value="">- pilih -</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
       </div>
     </div>
-    <label>No. Palet (FG)</label>
+    <button class="btn g" onclick="mBukaScan()">📷 Scan Barcode Palet</button>
+    <label style="margin-top:8px">atau ketik No. Palet (FG)</label>
     <input id="mPalet" placeholder="contoh: FG-26/11/001" onkeydown="if(event.key==='Enter')mCari()">
     <button class="btn" onclick="mCari()">CARI PALET</button>
     <div id="mInfo" class="card" style="display:none">
@@ -144,16 +139,17 @@ if ('serviceWorker' in navigator) {
     </div>
     <button id="btnSimpan" class="btn g" onclick="simpanTerima()">Simpan Konfirmasi</button>
     <button id="btnBaru" class="btn o" style="display:none" onclick="kosongkanTerima()">Terima Kitir Lain</button>
-    <button class="btn wa" onclick="terimaShareWa()">Share WA</button>
+    <button class="btn wa" style="background:#25D366" onclick="terimaShareWa()">Share WA</button>
   </div>
 </section>
 
 <div id="scanModal"><div id="scanBox">
-  <div style="font-weight:bold;text-align:center;margin-bottom:8px">Scan Barcode Kitir</div>
+  <div style="font-weight:bold;text-align:center;margin-bottom:8px">Scan Barcode</div>
   <div id="reader"></div>
-  <button class="btn o" onclick="tutupScan()">Tutup Kamera</button>
+  <button class="btn o" onclick="tutupScanSemua()">Tutup Kamera</button>
 </div></div>
 
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 var URL_EXEC = 'https://script.google.com/macros/s/AKfycbxp5L0rGdC0ki2M18YjNnylr0aAOXDLCzW5k84fJhT7aCkdlFrPeOY2tH0b75MMjDJh/exec';
 var KEY = '';
@@ -162,13 +158,13 @@ var mItem = null;
 var kitirAktif = null;
 var itemsAktif = [];
 var html5QrCode = null;
+var mQr = null;
 
 var $ = function (id) { return document.getElementById(id); };
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function hariIni() { var d = new Date(), z = function (n) { return String(n).padStart(2, '0'); }; return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); }
 function jamHM() { var n = new Date(); return String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0'); }
 function fmtN(n) { return Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 }); }
-function tglIndo(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : (iso || ''); }
 
 function api(params) {
   var q = new URLSearchParams(Object.assign({ k: KEY }, params));
@@ -199,9 +195,43 @@ function tab(id) {
   if (id === 'muat' && !$('mTgl').value) $('mTgl').value = hariIni();
 }
 
+/* ===== SCAN (kamera bersama) ===== */
+
+function tutupScanSemua() {
+  if (mQr) mTutupScan();
+  else tutupScan();
+}
+
 /* ===== MUAT BARANG ===== */
 
 function mMsg(t, c) { $('mMsg').textContent = t; $('mMsg').className = c || ''; }
+
+function mBukaScan() {
+  $('scanModal').style.display = 'block';
+  mQr = new Html5Qrcode('reader');
+  mQr.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 240, height: 120 } },
+    function (decoded) {
+      mTutupScan();
+      $('mPalet').value = String(decoded).trim();
+      mCari();
+    },
+    function () {}
+  ).catch(function (e) {
+    $('scanModal').style.display = 'none';
+    mQr = null;
+    mMsg('Kamera gagal dibuka: ' + e, 'bad');
+  });
+}
+
+function mTutupScan() {
+  $('scanModal').style.display = 'none';
+  if (mQr) {
+    mQr.stop().then(function () { mQr.clear(); }).catch(function () {});
+    mQr = null;
+  }
+}
 
 function mCari() {
   var palet = $('mPalet').value.trim();
@@ -384,19 +414,25 @@ function terimaShareWa() {
 function bukaScan() {
   $('scanModal').style.display = 'block';
   html5QrCode = new Html5Qrcode('reader');
-  html5QrCode.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 280, height: 120 } },
+  html5QrCode.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 120 } },
     function (decoded) {
       tutupScan();
       $('fKitir').value = String(decoded).trim();
       cariKitir(decoded);
     }, function () {})
-    .catch(function (e) { $('scanModal').style.display = 'none'; setMsg('Kamera gagal dibuka: ' + e, 'bad'); });
+    .catch(function (e) {
+      $('scanModal').style.display = 'none';
+      html5QrCode = null;
+      setMsg('Kamera gagal dibuka: ' + e, 'bad');
+    });
 }
 
 function tutupScan() {
   $('scanModal').style.display = 'none';
   if (html5QrCode) { html5QrCode.stop().then(function () { html5QrCode.clear(); }).catch(function () {}); html5QrCode = null; }
 }
+
+$('pin').focus();
 </script>
 </body>
 </html>
